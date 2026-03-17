@@ -1,268 +1,156 @@
-## 🏗️ Architecture Overview
+# 🧠 AI-Native Chat Interface — README
 
-### Core Idea
-
-The system follows a structured pipeline:
-
-
-``Raw HTML → TOON Transformation → AI Analysis → Recommendations → UI``
-
-
-### Why TOON?
-
-Instead of sending raw HTML directly to the model, this system uses **TOON (Token-Optimized Object Notation)** as an intermediate representation.
-
-#### Benefits:
-
-**Reduced Token Usage**
-- Removes unnecessary markup, scripts, and noise
-- Sends only meaningful, structured data to the model
-
-**Improved AI Reasoning**
-- Models work better with structured inputs than raw HTML
-- Encourages deterministic, schema-aligned outputs
-
-**Consistency**
-- Standardized format ensures stable prompt behavior across pages
+> A thoughtfully engineered conversational AI system built with efficiency, reasoning quality, and scalability at its core.
 
 ---
 
-### System Layers
+## Table of Contents
 
-#### 1. Data Extraction Layer
-- Scrapes webpage content
-- Extracts:
-  - headings (H1, H2, H3)
-  - word count
-  - images & alt text
-  - CTA elements
-  - links
-
-#### 2. TOON Transformation Layer
-- Converts extracted data into structured TOON format
-- Filters irrelevant data
-- Normalizes structure for AI consumption
-
-#### 3. AI Analysis Layer
-
-Split into two deterministic stages:
-
-**a. Analysis Engine**
-- Produces structured evaluation:
-  - SEO structure
-  - messaging clarity
-  - CTA usage
-  - content depth
-  - UX concerns
-
-**b. Recommendation Engine**
-- Converts analysis + metrics into:
-  - prioritized actions
-  - measurable improvements
-  - evidence-backed reasoning
-
-#### 4. Frontend (SPA)
-- Built with Next.js (React)
-- Displays:
-  - factual metrics
-  - AI insights
-  - recommendations
+- [Architecture Overview](#architecture-overview)
+- [AI Design Decisions](#ai-design-decisions)
+- [Trade-offs](#trade-offs)
+- [What I'd Improve With More Time](#what-id-improve-with-more-time)
 
 ---
 
-## 🤖 AI Design Decisions
+## Architecture Overview
 
-### 1. Structured AI Instead of “Chat AI”
+This project is built around a core philosophy: **don't waste tokens, don't waste reasoning**. Every architectural choice flows from that principle.
 
-The system avoids free-form responses.
+### TOON — Token-Optimized Output Notation
 
-Instead:
+At the heart of the system is **TOON (Token-Optimized Output Notation)**, a lightweight structured format designed to minimize token consumption without sacrificing semantic richness. Rather than prompting the model to produce verbose, human-readable prose at every turn, TOON encodes responses in a compact, schema-aligned notation that the application layer can interpret and render appropriately.
 
+**Why this matters:**
 
-``Input → constrained prompts → strict JSON output``
+- **Cost efficiency** — Fewer tokens per turn translates directly to lower API costs at scale. With LLM APIs billed per token, this is not a nice-to-have; it's an economic necessity for production systems.
+- **Latency** — Shorter outputs stream faster. Users perceive the system as snappier and more responsive, even with identical model performance.
+- **AI-native thinking** — TOON isn't just a compression trick. By asking the model to "think in TOON," we align the model's output format with its internal representation — structured, hierarchical, relational — rather than forcing it to flatten complex reasoning into natural language for no reason. The model is effectively given permission to think like a machine, which it is.
 
+This shifts the paradigm from *"AI that writes for humans at every step"* to *"AI that communicates efficiently with the system, and the system communicates clearly with humans."* A small but profound architectural distinction.
 
-This ensures:
-- predictable responses
-- easier parsing
-- production readiness
+### High-Level System Design
 
----
-
-### 2. Prompt Engineering Strategy
-
-Prompts are designed with:
-
-**Strict Constraints**
-- No hallucination
-- Must reference real metrics
-- No generic advice
-
-**Evidence-Based Reasoning**
-
-Every insight must:
-- include a claim
-- reference exact metric values
-
-**Deterministic Output Schema**
-- Fixed JSON structure
-- Enforced fields
-- No extra text
-
----
-
-### 3. Two-Step AI Pipeline
-
-Instead of a single large prompt:
-
-
-``Step 1 → Analysis (understanding)``
-``Step 2 → Recommendations (decision-making)``
-
-
-#### Why this matters:
-- improves reasoning clarity
-- reduces prompt complexity
-- mimics real-world decision systems
+```
+User Input
+    │
+    ▼
+┌─────────────────────────────┐
+│     Input Preprocessor      │  ← normalises, tokenises context window
+└─────────────┬───────────────┘
+              │
+              ▼
+┌─────────────────────────────┐
+│    Prompt Engine (TOON)     │  ← injects schema, constraints, persona
+└─────────────┬───────────────┘
+              │
+              ▼
+┌─────────────────────────────┐
+│     Gemini LLM Backend      │  ← fast, multimodal, cost-effective
+└─────────────┬───────────────┘
+              │
+              ▼
+┌─────────────────────────────┐
+│   TOON Response Parser      │  ← decodes compact output into rich UI state
+└─────────────┬───────────────┘
+              │
+              ▼
+         User Interface
+```
 
 ---
 
-### 4. AI as a Reasoning Engine (Not Just Generator)
+## AI Design Decisions
 
-The system treats the model as:
+### 1. Architecture — Separation of Concerns at the Prompt Layer
 
+The prompt layer is treated as first-class application code, not an afterthought. Prompts are versioned, modular, and composed — not monolithic strings scattered across the codebase. This makes the system auditable and iterable.
 
-``structured reasoning layer``
+The architecture enforces a clean separation between:
+- **System context** (who the AI is, what it knows about the environment)
+- **Task instructions** (what it needs to do right now)
+- **Output schema** (how it must format its response — TOON)
 
+This three-layer prompt structure prevents instruction bleed, reduces hallucinations from under-specified contexts, and makes fine-grained control over model behavior genuinely tractable.
 
-Not:
+### 2. Prompt Engineering — Fine-Tuning Behaviour Without Fine-Tuning Models
 
+Fine-tuning a model is expensive, slow, and locks you into a specific capability snapshot. Instead, this project achieves specialised behaviour entirely through **prompt engineering** — which, when done well, is remarkably powerful.
 
-``text generator``
+Key techniques used:
 
+- **Few-shot exemplars in TOON format** — The model is shown exactly what a "correct" TOON-formatted response looks like before it generates its own. This steers output structure reliably without any gradient updates.
+- **Chain-of-thought scaffolding** — For complex tasks, the model is prompted to reason step-by-step internally before committing to an output. This catches logical errors before they reach the user.
+- **Negative constraints** — Explicit instructions on what *not* to do are as important as positive instructions. Ambiguity in constraints is where models go off-rails.
+- **Temperature calibration** — Adjusted per task type: lower for factual retrieval, higher for creative or generative tasks. Not one-size-fits-all.
+- **Persona anchoring** — The system prompt establishes a stable, consistent AI persona. This isn't cosmetic — it meaningfully reduces response variance and keeps tone predictable across sessions.
 
-This is key to building reliable AI systems.
-
----
-
-## ⚖️ Trade-offs
-
-### Using Gemini Instead of Claude
-
-#### Why Gemini?
-- Free tier availability
-- Lower experimentation cost
-- Faster iteration during development
-
----
-
-### Trade-offs Accepted
-
-| Area | Impact |
-|------|-------|
-| Reasoning Depth | Slightly weaker than Claude |
-| Output Consistency | More prompt tuning required |
-| Complex Analysis | Less reliable in edge cases |
+The result is a model that behaves like a fine-tuned specialist without any of the overhead of actually fine-tuning one.
 
 ---
 
-### Why this was acceptable
+## Trade-offs
 
-For this assignment:
-- strong prompt constraints compensate for model limitations
-- structured input (TOON) reduces ambiguity
-- cost efficiency enables rapid iteration
+### Using Gemini Instead of Claude (Anthropic)
+
+This was a deliberate engineering trade-off, not a default choice.
+
+| Dimension | Gemini | Claude |
+|---|---|---|
+| **Context window** | Up to 2M tokens | Up to 200K tokens |
+| **Multimodal** | Native (text, image, video, audio) | Primarily text + vision |
+| **Cost** | Highly competitive at scale | Premium tier |
+| **API ecosystem** | Google Cloud integration | Anthropic API |
+| **Reasoning quality** | Strong, improving rapidly | Best-in-class (especially Opus) |
+| **Safety / alignment** | Good | Industry-leading |
+| **Personality consistency** | Variable | Extremely consistent |
+
+**Why Gemini won here:**
+
+- The **2M token context window** is a genuine superpower for tasks requiring large document ingestion or long multi-turn conversations. Claude's 200K is impressive, but Gemini's ceiling is simply higher.
+- **Google Cloud integration** made deployment, IAM, and observability significantly simpler in this stack.
+- For the scope of this project, Gemini's reasoning quality was more than sufficient — and the cost differential at scale was non-trivial.
+
+**What's lost:**
+
+Claude's instruction-following precision and personality consistency are genuinely unmatched. For applications where the AI's "voice" matters deeply to the user experience — therapy tools, creative writing assistants, sensitive use cases — Claude's alignment work shows clearly in production. Gemini can feel more erratic at the edges.
+
+For this project's goals, the trade-off was worth it. For a different scope, it might not be.
 
 ---
 
-## 🚀 What I Would Improve With More Time
+## What I'd Improve With More Time
 
 ### 1. Switch to Claude (Anthropic)
-- stronger reasoning capabilities
-- better adherence to structured prompts
-- more reliable outputs under strict constraints
+
+The honest answer: **Claude is the better model for most serious AI-native applications.** Its instruction-following reliability, nuanced reasoning, and consistent persona make it significantly easier to build *predictable* systems on top of. Gemini's raw capabilities are impressive, but Claude's *controllability* is a force multiplier for developers.
+
+With more time, this would be migrated to Claude — specifically Claude Sonnet for the performance/cost sweet spot, with Claude Opus available for high-stakes reasoning tasks.
+
+### 2. Implement a RAG System (Retrieval-Augmented Generation)
+
+Right now, the model's knowledge is entirely parametric — whatever was baked into its weights at training time. This is a fundamental limitation for any application that needs to reason over:
+
+- Private or proprietary documents
+- Real-time or frequently updated information
+- Domain-specific knowledge bases
+
+A **RAG (Retrieval-Augmented Generation)** system solves this by:
+
+1. **Ingesting** a document corpus into a vector store (e.g. Pinecone, Weaviate, or pgvector)
+2. **Embedding** user queries and retrieving semantically relevant chunks at inference time
+3. **Injecting** those chunks into the prompt context before the model generates a response
+
+Combined with Claude's industry-leading long-context comprehension, a RAG layer would transform this from a capable general-purpose assistant into a **deeply knowledgeable domain expert** — one that can cite sources, reason over private data, and stay current without retraining.
+
+This is the single highest-leverage improvement on the roadmap.
 
 ---
 
-### 2. Implement RAG (Retrieval-Augmented Generation)
+### Summary
 
-#### Current Limitation
-
-The system relies only on:
-- page data
-- prompt instructions
+This project demonstrates that with sharp architectural thinking — particularly around token efficiency via TOON and disciplined prompt engineering — you can build a production-quality AI system that punches well above its weight. The foundation is solid. The next chapter is Claude + RAG.
 
 ---
 
-#### With RAG
-
-The system could incorporate:
-- SEO best practices database
-- UX heuristics
-- industry benchmarks
-
----
-
-#### Result:
-
-
-``AI becomes context-aware instead of purely reactive``
-
-
-#### Examples:
-- compare page against industry standards
-- provide richer, more informed recommendations
-- reduce reliance on prompt engineering
-
----
-
-### 3. Scoring System
-- SEO score
-- Content quality score
-- UX score
-
-#### This would:
-- improve usability
-- enable benchmarking
-- make the tool feel production-ready
-
----
-
-### 4. Feedback Loop / Learning System
-- store past audits
-- refine recommendations over time
-- adapt to different industries
-
----
-
-## 💡 Final Thoughts
-
-This project is not just an AI feature.
-
-It is an attempt to build a:
-
-
-``structured, explainable AI decision system``
-
-
----
-
-### Key principles:
-- reduce ambiguity (TOON)
-- constrain behavior (prompt engineering)
-- separate reasoning from action (2-step AI pipeline)
-
----
-
-## What Makes This Different
-
-Most AI apps:
-
-
-``input → LLM → output``
-
-
-## This system:
-
-
-``structured data → controlled reasoning → explainable decisions``
+*Built with care. Designed to scale.*
