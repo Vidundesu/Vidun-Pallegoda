@@ -68,30 +68,6 @@ async function postAudit(url: string): Promise<AuditResult> {
   return json.data;
 }
 
-// Page Transition Wrapper Component
-const PageTransition = ({ children, pageKey }: { children: React.ReactNode; pageKey: string }) => {
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    // Reset and trigger animation on page change
-    setIsVisible(false);
-    const timer = setTimeout(() => setIsVisible(true), 50);
-    return () => clearTimeout(timer);
-  }, [pageKey]);
-
-  return (
-    <div
-      className={`transition-all duration-700 ease-out transform ${
-        isVisible
-          ? 'opacity-100 translate-y-0'
-          : 'opacity-0 translate-y-12'
-      }`}
-    >
-      {children}
-    </div>
-  );
-};
-
 // Loading Modal Component with Stages
 const LoadingModal = ({ isOpen, currentStage }: { isOpen: boolean; currentStage: number }) => {
   const stages = [
@@ -589,8 +565,8 @@ const AIInsightsPage = ({ insights }: { insights: DashboardInsight[] }) => {
 
       <div className="grid gap-6">
         {insights.map((insight, idx) => (
-          <div 
-            key={insight.id} 
+          <div
+            key={insight.id}
             className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02]"
             style={{ animationDelay: `${idx * 100}ms` }}
           >
@@ -650,8 +626,8 @@ const RecommendationsPage = ({ recommendations }: { recommendations: DashboardRe
 
       <div className="grid gap-6">
         {recommendations.map((rec, idx) => (
-          <div 
-            key={rec.id} 
+          <div
+            key={rec.id}
             className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.01]"
             style={{ animationDelay: `${idx * 100}ms` }}
           >
@@ -984,65 +960,45 @@ export default function AssignmentDashboard() {
   const renderPage = () => {
     switch (currentPage) {
       case 'main':
-        return (
-          <PageTransition pageKey="main">
-            <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} onViewAllLogs={() => setCurrentPage("logs")} />
-          </PageTransition>
-        );
+        return <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} onViewAllLogs={() => setCurrentPage("logs")} />;
       case 'metrics':
-        return (
-          <PageTransition pageKey="metrics">
-            <FactualMetricsPage result={effectiveResult} url={effectiveUrl} timestamp={effectiveTimestamp} onNext={handleNextToInsights} />
-          </PageTransition>
-        );
+        return <FactualMetricsPage result={effectiveResult} url={effectiveUrl} timestamp={effectiveTimestamp} onNext={handleNextToInsights} />;
       case 'insights':
         return (
-          <PageTransition pageKey="insights">
-            <div className="space-y-4">
-              {effectiveUrl && effectiveTimestamp ? (
-                <div className="text-sm text-gray-500 flex items-center gap-2">
-                  <ExternalLink size={14} />
-                  <a href={effectiveUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
-                    {effectiveUrl}
-                  </a>
-                  <span>•</span>
-                  <span>{new Date(effectiveTimestamp).toLocaleString()}</span>
-                </div>
-              ) : null}
-              <AIInsightsPage insights={effectiveInsights} />
-            </div>
-          </PageTransition>
+          <div className="space-y-4">
+            {effectiveUrl && effectiveTimestamp ? (
+              <div className="text-sm text-gray-500 flex items-center gap-2">
+                <ExternalLink size={14} />
+                <a href={effectiveUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
+                  {effectiveUrl}
+                </a>
+                <span>•</span>
+                <span>{new Date(effectiveTimestamp).toLocaleString()}</span>
+              </div>
+            ) : null}
+            <AIInsightsPage insights={effectiveInsights} />
+          </div>
         );
       case 'recommendations':
         return (
-          <PageTransition pageKey="recommendations">
-            <div className="space-y-4">
-              {effectiveUrl && effectiveTimestamp ? (
-                <div className="text-sm text-gray-500 flex items-center gap-2">
-                  <ExternalLink size={14} />
-                  <a href={effectiveUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
-                    {effectiveUrl}
-                  </a>
-                  <span>•</span>
-                  <span>{new Date(effectiveTimestamp).toLocaleString()}</span>
-                </div>
-              ) : null}
-              <RecommendationsPage recommendations={recommendations} />
-            </div>
-          </PageTransition>
+          <div className="space-y-4">
+            {effectiveUrl && effectiveTimestamp ? (
+              <div className="text-sm text-gray-500 flex items-center gap-2">
+                <ExternalLink size={14} />
+                <a href={effectiveUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
+                  {effectiveUrl}
+                </a>
+                <span>•</span>
+                <span>{new Date(effectiveTimestamp).toLocaleString()}</span>
+              </div>
+            ) : null}
+            <RecommendationsPage recommendations={recommendations} />
+          </div>
         );
       case 'logs':
-        return (
-          <PageTransition pageKey="logs">
-            <LogsPage runs={serverRuns} onOpen={handleOpenServerLog} />
-          </PageTransition>
-        );
+        return <LogsPage runs={serverRuns} onOpen={handleOpenServerLog} />;
       default:
-        return (
-          <PageTransition pageKey="main">
-            <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} onViewAllLogs={() => setCurrentPage("logs")} />
-          </PageTransition>
-        );
+        return <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} onViewAllLogs={() => setCurrentPage("logs")} />;
     }
   };
 
@@ -1059,34 +1015,6 @@ export default function AssignmentDashboard() {
           background: #fafafa;
           margin: 0;
           padding: 0;
-        }
-
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-
-        @keyframes scaleIn {
-          from {
-            transform: scale(0.95);
-            opacity: 0;
-          }
-          to {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-
-        .animate-scaleIn {
-          animation: scaleIn 0.3s ease-out;
         }
       `}</style>
 
