@@ -17,6 +17,107 @@ type DashboardLog = {
   error?: string;
 };
 
+const PromptLogsPage = ({
+  items,
+  isLoading,
+}: {
+  items: PromptLogListItem[];
+  isLoading: boolean;
+}) => {
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-3xl font-light text-gray-900 mb-2">Prompt Logs</h2>
+        <p className="text-gray-500">Raw prompt/response data for each model call</p>
+      </div>
+
+      {!isLoading && items.length === 0 ? (
+        <div className="text-center py-20">
+          <div className="text-6xl mb-4">🧾</div>
+          <h2 className="text-2xl font-light text-gray-900 mb-2">No Prompt Logs Yet</h2>
+          <p className="text-gray-500">Your model call history will appear here</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
+                  <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Step</th>
+                  <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {isLoading ? (
+                  <>
+                    <ShimmerRow />
+                    <ShimmerRow />
+                    <ShimmerRow />
+                    <ShimmerRow />
+                  </>
+                ) : null}
+
+                {!isLoading
+                  ? items.map((item) => {
+                      const isOpen = openId === item.id;
+                      return (
+                        <React.Fragment key={item.id}>
+                          <tr
+                            className="cursor-pointer hover:bg-gray-50 transition-colors"
+                            onClick={() => setOpenId(isOpen ? null : item.id)}
+                          >
+                            <td className="px-6 py-4 text-sm text-blue-600 font-medium">
+                              {item.url || "(unknown url)"}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{item.step}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">
+                              {new Date(item.timestamp).toLocaleString()}
+                            </td>
+                          </tr>
+
+                          {isOpen ? (
+                            <tr className="bg-gray-50/50">
+                              <td className="px-6 py-4" colSpan={3}>
+                                <div className="space-y-4">
+                                  <div>
+                                    <div className="text-xs font-medium text-gray-700 uppercase tracking-wider mb-2">System Prompt</div>
+                                    <pre className="text-xs text-gray-500 whitespace-pre-wrap break-words bg-white border border-gray-500 rounded-lg p-4 max-h-64 overflow-auto">{item.systemPrompt}</pre>
+                                  </div>
+
+                                  <div>
+                                    <div className="text-xs font-medium text-gray-700 uppercase tracking-wider mb-2">User Prompt</div>
+                                    <pre className="text-xs text-gray-500 whitespace-pre-wrap break-words bg-white border border-gray-200 rounded-lg p-4 max-h-64 overflow-auto">{item.userPrompt}</pre>
+                                  </div>
+
+                                  <div>
+                                    <div className="text-xs font-medium text-gray-700 uppercase tracking-wider mb-2">Structured Input</div>
+                                    <pre className="text-xs text-gray-500 whitespace-pre-wrap break-words bg-white border border-gray-200 rounded-lg p-4 max-h-64 overflow-auto">{JSON.stringify(item.structuredInput, null, 2)}</pre>
+                                  </div>
+
+                                  <div>
+                                    <div className="text-xs font-medium text-gray-700 uppercase tracking-wider mb-2">Raw Model Output</div>
+                                    <pre className="text-xs text-gray-500 whitespace-pre-wrap break-words bg-white border border-gray-200 rounded-lg p-4 max-h-64 overflow-auto">{item.rawOutput}</pre>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </React.Fragment>
+                      );
+                    })
+                  : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 type InsightSeverity = "high" | "medium" | "low";
 type DashboardInsight = {
   id: string;
@@ -49,6 +150,17 @@ type OpenedLog = {
   url: string;
   timestamp: string;
   result: AuditResult;
+};
+
+type PromptLogListItem = {
+  id: string;
+  timestamp: string;
+  url: string;
+  step: "analysis" | "recommendations" | "unknown";
+  systemPrompt: string;
+  userPrompt: string;
+  structuredInput: unknown;
+  rawOutput: string;
 };
 
 const ShimmerRow = () => {
@@ -156,7 +268,8 @@ const Sidebar = ({ currentPage, setCurrentPage }: { currentPage: string; setCurr
     { id: 'metrics', label: 'Factual Metrics', icon: TrendingUp },
     { id: 'insights', label: 'AI Insights', icon: Sparkles },
     { id: 'recommendations', label: 'Recommendations', icon: Target },
-    { id: 'logs', label: 'Logs', icon: FileText }
+    { id: 'logs', label: 'Analysis Logs', icon: FileText },
+    { id: 'promptLogs', label: 'Prompt Logs', icon: FileText }
   ];
 
   return (
@@ -823,6 +936,9 @@ export default function AssignmentDashboard() {
   const [serverRunsLoading, setServerRunsLoading] = useState(false);
   const [openedLog, setOpenedLog] = useState<OpenedLog | null>(null);
 
+  const [promptLogs, setPromptLogs] = useState<PromptLogListItem[]>([]);
+  const [promptLogsLoading, setPromptLogsLoading] = useState(false);
+
   const latestCompleted = useMemo(() => {
     return logs.find((l) => l.status === "completed" && l.result);
   }, [logs]);
@@ -895,6 +1011,24 @@ export default function AssignmentDashboard() {
   useEffect(() => {
     if (currentPage !== "logs") return;
     void fetchServerRuns();
+  }, [currentPage]);
+
+  const fetchPromptLogs = async () => {
+    setPromptLogsLoading(true);
+    try {
+      const res = await fetch("/api/prompt-logs", { cache: "no-store" });
+      const json = (await res.json()) as { success: boolean; data?: PromptLogListItem[] };
+      if (json.success && json.data) {
+        setPromptLogs(json.data);
+      }
+    } finally {
+      setPromptLogsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentPage !== "promptLogs") return;
+    void fetchPromptLogs();
   }, [currentPage]);
 
   const recommendations = useMemo<DashboardRecommendation[]>(() => {
@@ -1032,6 +1166,8 @@ export default function AssignmentDashboard() {
         );
       case 'logs':
         return <LogsPage runs={serverRuns} onOpen={handleOpenServerLog} isLoading={serverRunsLoading} />;
+      case 'promptLogs':
+        return <PromptLogsPage items={promptLogs} isLoading={promptLogsLoading} />;
       default:
         return <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} onViewAllLogs={() => setCurrentPage("logs")} />;
     }
