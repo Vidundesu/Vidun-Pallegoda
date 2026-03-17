@@ -72,7 +72,7 @@ Return ONLY a JSON array of recommendation objects.`;
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: AI_TEMPERATURE,
-        maxOutputTokens: 1200,
+        maxOutputTokens: 8192,
         responseMimeType: "application/json",
       },
     });

@@ -59,7 +59,7 @@ export async function analyzePage(
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: AI_TEMPERATURE,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 8192,
         responseMimeType: "application/json",
       },
     });
