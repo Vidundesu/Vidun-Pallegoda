@@ -4,7 +4,7 @@ import type { PageMetrics, PageContent } from "@/core/types";
  * metricsToTOON — Converts structured metrics + content into TOON notation.
  * This is the ONLY AI input boundary. Raw HTML must never cross this layer.
  *
- * TOON (Typed Object Notation) provides a deterministic, structured
+ * TOON (Token Oriented Object Notation) provides a deterministic, structured
  * representation that prevents AI from pattern-matching raw markup.
  */
 export function metricsToTOON(

@@ -12,8 +12,17 @@ STRICT RULES:
 - Each recommendation MUST cite a specific metric from the provided data (e.g., "word_count: 320", "images_missing_alt_pct: 75%")
 - Priority must be one of: "high", "medium", or "low"
 - Recommendations must be concise and immediately actionable
+- Recommendations must include a measurable target when applicable
 - Do NOT pad with generic best practices not grounded in the metrics
 - Do NOT hallucinate issues not supported by the metrics or analysis
+- Do not include trailing commas
+- Do not include explanations outside JSON
+- All fields must be present even if value is "insufficient data"
+
+Assign priority based on impact:
+- high → directly affects SEO ranking or conversions
+- medium → improves clarity or engagement
+- low → minor optimizations
 
 Return ONLY valid JSON as an array:
 [

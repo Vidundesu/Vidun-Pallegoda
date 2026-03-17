@@ -37,6 +37,20 @@ type DashboardRecommendation = {
   steps: string[];
 };
 
+type ServerLogRun = {
+  id: string;
+  url: string;
+  timestamp: string;
+  hasRecommendations: boolean;
+};
+
+type OpenedLog = {
+  id: string;
+  url: string;
+  timestamp: string;
+  result: AuditResult;
+};
+
 async function postAudit(url: string): Promise<AuditResult> {
   const response = await fetch("/api/audit", {
     method: "POST",
@@ -54,6 +68,30 @@ async function postAudit(url: string): Promise<AuditResult> {
   return json.data;
 }
 
+// Page Transition Wrapper Component
+const PageTransition = ({ children, pageKey }: { children: React.ReactNode; pageKey: string }) => {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Reset and trigger animation on page change
+    setIsVisible(false);
+    const timer = setTimeout(() => setIsVisible(true), 50);
+    return () => clearTimeout(timer);
+  }, [pageKey]);
+
+  return (
+    <div
+      className={`transition-all duration-700 ease-out transform ${
+        isVisible
+          ? 'opacity-100 translate-y-0'
+          : 'opacity-0 translate-y-12'
+      }`}
+    >
+      {children}
+    </div>
+  );
+};
+
 // Loading Modal Component with Stages
 const LoadingModal = ({ isOpen, currentStage }: { isOpen: boolean; currentStage: number }) => {
   const stages = [
@@ -67,12 +105,12 @@ const LoadingModal = ({ isOpen, currentStage }: { isOpen: boolean; currentStage:
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-white rounded-3xl p-12 max-w-md w-full mx-4 shadow-2xl">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center animate-fadeIn">
+      <div className="bg-white rounded-3xl p-12 max-w-md w-full mx-4 shadow-2xl animate-scaleIn">
         <div className="text-center space-y-8">
           {/* Animated Icon */}
           <div className="relative">
-            <div className="text-7xl animate-bounce">
+            <div className="p-8 text-6xl animate-pulse">
               {stages[currentStage]?.icon}
             </div>
             <div className="absolute inset-0 flex items-center justify-center">
@@ -95,12 +133,12 @@ const LoadingModal = ({ isOpen, currentStage }: { isOpen: boolean; currentStage:
             {stages.map((_, idx) => (
               <div
                 key={idx}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                className={`h-2 rounded-full transition-all duration-300 ${
                   idx === currentStage
                     ? 'bg-blue-600 w-8'
                     : idx < currentStage
-                    ? 'bg-green-500'
-                    : 'bg-gray-300'
+                    ? 'bg-green-500 w-2'
+                    : 'bg-gray-300 w-2'
                 }`}
               />
             ))}
@@ -158,6 +196,9 @@ const Sidebar = ({ currentPage, setCurrentPage }: { currentPage: string; setCurr
       </nav>
 
       <div className="p-6 border-t border-gray-100">
+        <a href="mailto:vinethdina77@gmail.com" className="text-xs text-gray-400">
+          vinethdina77@gmail.com
+        </a>
         <div className="text-xs text-gray-400">
           Last updated: {new Date().toLocaleDateString()}
         </div>
@@ -172,11 +213,13 @@ const MainPage = ({
   onAnalyze,
   isAnalyzing,
   error,
+  onViewAllLogs,
 }: {
   logs: DashboardLog[];
   onAnalyze: (url: string) => Promise<void>;
   isAnalyzing: boolean;
   error: string | null;
+  onViewAllLogs: () => void;
 }) => {
   const [url, setUrl] = useState('');
 
@@ -196,7 +239,7 @@ const MainPage = ({
     <div className="space-y-12">
       {/* URL Input Section */}
       <div className="max-w-3xl">
-        <h2 className="text-3xl font-light text-gray-900 mb-2">Analyze URL | <span className='bg-gradient-to-r from-[#2c004a] to-purple-500 bg-clip-text text-transparent'>Eight 25 Media</span> </h2>
+        <h2 className="text-3xl font-light text-gray-900 mb-2">Vidun Pallegoda | AI-Native Software Engineer | <span className='bg-gradient-to-r from-[#2c004a] to-purple-500 bg-clip-text text-transparent'>eight25 Media</span>  </h2>
         <p className="text-gray-500 mb-8">Enter a URL to analyze performance, accessibility, and SEO metrics</p>
 
         <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
@@ -241,7 +284,7 @@ const MainPage = ({
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-light text-gray-900">Recent Analysis</h2>
           <button
-            onClick={() => window.location.hash = '#logs'}
+            onClick={onViewAllLogs}
             className="text-sm text-blue-600 hover:text-blue-700 font-medium"
           >
             View All →
@@ -294,10 +337,12 @@ const MainPage = ({
 const FactualMetricsPage = ({
   result,
   url,
+  timestamp,
   onNext
 }: {
   result: AuditResult | null;
   url: string | null;
+  timestamp: string | null;
   onNext: () => void;
 }) => {
   if (!result || !url) {
@@ -330,6 +375,11 @@ const FactualMetricsPage = ({
             >
               {url}
             </a>
+            {timestamp ? (
+              <div className="text-sm text-gray-500 mt-2">
+                {new Date(timestamp).toLocaleString()}
+              </div>
+            ) : null}
           </div>
           <CheckCircle2 size={32} className="text-green-500" />
         </div>
@@ -463,7 +513,7 @@ const FactualMetricsPage = ({
       <div className="flex justify-end pt-8">
         <button
           onClick={onNext}
-          className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center gap-3 font-medium text-lg shadow-lg hover:shadow-xl"
+          className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center gap-3 font-medium text-lg shadow-lg hover:shadow-xl transform hover:scale-105"
         >
           Next: AI Insights
           <ArrowRight size={20} />
@@ -498,7 +548,7 @@ const MetricBox = ({
   };
 
   return (
-    <div className={`bg-gradient-to-br ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue} rounded-xl border p-6 hover:shadow-lg transition-all duration-200`}>
+    <div className={`bg-gradient-to-br ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue} rounded-xl border p-6 hover:shadow-lg transition-all duration-200 transform hover:scale-105`}>
       <div className="text-4xl mb-3">{icon}</div>
       <h3 className="text-sm font-medium text-gray-500 mb-2">{label}</h3>
       <div className="text-3xl font-light text-gray-900 mb-2">
@@ -538,8 +588,12 @@ const AIInsightsPage = ({ insights }: { insights: DashboardInsight[] }) => {
       </div>
 
       <div className="grid gap-6">
-        {insights.map((insight) => (
-          <div key={insight.id} className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-200">
+        {insights.map((insight, idx) => (
+          <div 
+            key={insight.id} 
+            className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02]"
+            style={{ animationDelay: `${idx * 100}ms` }}
+          >
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
@@ -595,8 +649,12 @@ const RecommendationsPage = ({ recommendations }: { recommendations: DashboardRe
       </div>
 
       <div className="grid gap-6">
-        {recommendations.map((rec) => (
-          <div key={rec.id} className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-200">
+        {recommendations.map((rec, idx) => (
+          <div 
+            key={rec.id} 
+            className="bg-white rounded-xl border border-gray-200 p-8 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.01]"
+            style={{ animationDelay: `${idx * 100}ms` }}
+          >
             <div className="flex items-start gap-4 mb-6">
               <div className={`w-1 h-full ${getPriorityColor(rec.priority)} rounded-full`} />
               <div className="flex-1">
@@ -646,7 +704,13 @@ const RecommendationsPage = ({ recommendations }: { recommendations: DashboardRe
 };
 
 // Logs Page
-const LogsPage = ({ logs }: { logs: DashboardLog[] }) => {
+const LogsPage = ({
+  runs,
+  onOpen,
+}: {
+  runs: ServerLogRun[];
+  onOpen: (id: string) => Promise<void>;
+}) => {
   return (
     <div className="space-y-8">
       <div>
@@ -654,7 +718,7 @@ const LogsPage = ({ logs }: { logs: DashboardLog[] }) => {
         <p className="text-gray-500">Complete history of all URL analyses</p>
       </div>
 
-      {logs.length === 0 ? (
+      {runs.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-6xl mb-4">📋</div>
           <h2 className="text-2xl font-light text-gray-900 mb-2">No Logs Yet</h2>
@@ -669,39 +733,39 @@ const LogsPage = ({ logs }: { logs: DashboardLog[] }) => {
                   <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
                   <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
                   <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Word Count</th>
-                  <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Images</th>
-                  <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Missing Alt</th>
+                  <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Download</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                {runs.map((run) => (
+                  <tr key={run.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
-                      <a href={log.url} className="text-blue-600 hover:text-blue-700 text-sm font-medium" target="_blank" rel="noopener noreferrer">
-                        {log.url}
-                      </a>
+                      <button
+                        onClick={() => onOpen(run.id)}
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium text-left"
+                      >
+                        {run.url}
+                      </button>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      {new Date(log.timestamp).toLocaleString()}
+                      {new Date(run.timestamp).toLocaleString()}
                     </td>
                     <td className="px-6 py-4">
                       <span
-                        className={`px-3 py-1 ${log.status === "failed" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"} text-xs font-medium rounded-full`}
+                        className={`px-3 py-1 ${run.hasRecommendations ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"} text-xs font-medium rounded-full`}
                       >
-                        {log.status}
+                        {run.hasRecommendations ? "completed" : "analysis"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {log.result?.metrics.wordCount ?? "—"}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {log.result?.metrics.imageCount ?? "—"}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {log.result
-                        ? `${Math.round(log.result.metrics.imagesMissingAltPercent)}%`
-                        : "—"}
+                    <td className="px-6 py-4 text-sm">
+                      <div className="flex items-center gap-3">
+                        <a
+                          className="text-blue-600 hover:text-blue-700 font-medium"
+                          href={`/api/logs/${run.id}/download`}
+                        >
+                          JSON
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -742,12 +806,19 @@ export default function AssignmentDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [currentAnalysisUrl, setCurrentAnalysisUrl] = useState<string | null>(null);
 
+  const [serverRuns, setServerRuns] = useState<ServerLogRun[]>([]);
+  const [openedLog, setOpenedLog] = useState<OpenedLog | null>(null);
+
   const latestCompleted = useMemo(() => {
     return logs.find((l) => l.status === "completed" && l.result);
   }, [logs]);
 
-  const insights = useMemo<DashboardInsight[]>(() => {
-    const analysis = latestCompleted?.result?.analysis;
+  const effectiveResult = openedLog?.result ?? latestCompleted?.result ?? null;
+  const effectiveUrl = openedLog?.url ?? currentAnalysisUrl;
+  const effectiveTimestamp = openedLog?.timestamp ?? (latestCompleted?.timestamp ?? null);
+
+  const effectiveInsights = useMemo<DashboardInsight[]>(() => {
+    const analysis = effectiveResult?.analysis;
     if (!analysis) return [];
 
     return [
@@ -792,10 +863,31 @@ export default function AssignmentDashboard() {
         impact: "Low",
       },
     ];
-  }, [latestCompleted]);
+  }, [effectiveResult]);
+
+  useEffect(() => {
+    if (currentPage !== "logs") return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/logs", { cache: "no-store" });
+        const json = (await res.json()) as { success: boolean; data?: ServerLogRun[] };
+        if (!cancelled && json.success && json.data) {
+          setServerRuns(json.data);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage]);
 
   const recommendations = useMemo<DashboardRecommendation[]>(() => {
-    const recs = latestCompleted?.result?.recommendations;
+    const recs = openedLog?.result.recommendations ?? latestCompleted?.result?.recommendations;
     if (!recs) return [];
 
     const priorityToImpact: Record<RecommendationPriority, "low" | "medium" | "high"> = {
@@ -813,7 +905,7 @@ export default function AssignmentDashboard() {
       description: `${r.reasoning}${r.metricReference ? `\n\nMetric: ${r.metricReference}` : ""}`,
       steps: [r.recommendation, r.metricReference].filter(Boolean) as string[],
     }));
-  }, [latestCompleted]);
+  }, [openedLog, latestCompleted]);
 
   // Simulate loading stages
   useEffect(() => {
@@ -823,7 +915,7 @@ export default function AssignmentDashboard() {
           if (prev < 4) return prev + 1;
           return prev;
         });
-      }, 800);
+      }, 1000);
 
       return () => clearInterval(interval);
     } else {
@@ -836,6 +928,7 @@ export default function AssignmentDashboard() {
     setIsAnalyzing(true);
     setLoadingStage(0);
     setCurrentAnalysisUrl(url);
+    setOpenedLog(null);
 
     const now = new Date().toISOString();
     const logId = `${now}-${Math.random().toString(16).slice(2)}`;
@@ -865,20 +958,91 @@ export default function AssignmentDashboard() {
     setCurrentPage('insights');
   };
 
+  const handleOpenServerLog = async (id: string) => {
+    try {
+      const res = await fetch(`/api/logs/${id}`, { cache: "no-store" });
+      const json = (await res.json()) as {
+        success: boolean;
+        data?: { id: string; url: string; timestamp: string; result: AuditResult };
+        error?: string;
+      };
+
+      if (!json.success || !json.data) {
+        setError(json.error ?? "Failed to open log");
+        return;
+      }
+
+      setError(null);
+      setOpenedLog(json.data);
+      setCurrentAnalysisUrl(json.data.url);
+      setCurrentPage("metrics");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to open log");
+    }
+  };
+
   const renderPage = () => {
     switch (currentPage) {
       case 'main':
-        return <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} />;
+        return (
+          <PageTransition pageKey="main">
+            <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} onViewAllLogs={() => setCurrentPage("logs")} />
+          </PageTransition>
+        );
       case 'metrics':
-        return <FactualMetricsPage result={latestCompleted?.result ?? null} url={currentAnalysisUrl} onNext={handleNextToInsights} />;
+        return (
+          <PageTransition pageKey="metrics">
+            <FactualMetricsPage result={effectiveResult} url={effectiveUrl} timestamp={effectiveTimestamp} onNext={handleNextToInsights} />
+          </PageTransition>
+        );
       case 'insights':
-        return <AIInsightsPage insights={insights} />;
+        return (
+          <PageTransition pageKey="insights">
+            <div className="space-y-4">
+              {effectiveUrl && effectiveTimestamp ? (
+                <div className="text-sm text-gray-500 flex items-center gap-2">
+                  <ExternalLink size={14} />
+                  <a href={effectiveUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
+                    {effectiveUrl}
+                  </a>
+                  <span>•</span>
+                  <span>{new Date(effectiveTimestamp).toLocaleString()}</span>
+                </div>
+              ) : null}
+              <AIInsightsPage insights={effectiveInsights} />
+            </div>
+          </PageTransition>
+        );
       case 'recommendations':
-        return <RecommendationsPage recommendations={recommendations} />;
+        return (
+          <PageTransition pageKey="recommendations">
+            <div className="space-y-4">
+              {effectiveUrl && effectiveTimestamp ? (
+                <div className="text-sm text-gray-500 flex items-center gap-2">
+                  <ExternalLink size={14} />
+                  <a href={effectiveUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
+                    {effectiveUrl}
+                  </a>
+                  <span>•</span>
+                  <span>{new Date(effectiveTimestamp).toLocaleString()}</span>
+                </div>
+              ) : null}
+              <RecommendationsPage recommendations={recommendations} />
+            </div>
+          </PageTransition>
+        );
       case 'logs':
-        return <LogsPage logs={logs} />;
+        return (
+          <PageTransition pageKey="logs">
+            <LogsPage runs={serverRuns} onOpen={handleOpenServerLog} />
+          </PageTransition>
+        );
       default:
-        return <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} />;
+        return (
+          <PageTransition pageKey="main">
+            <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} onViewAllLogs={() => setCurrentPage("logs")} />
+          </PageTransition>
+        );
     }
   };
 
@@ -895,6 +1059,34 @@ export default function AssignmentDashboard() {
           background: #fafafa;
           margin: 0;
           padding: 0;
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes scaleIn {
+          from {
+            transform: scale(0.95);
+            opacity: 0;
+          }
+          to {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+
+        .animate-scaleIn {
+          animation: scaleIn 0.3s ease-out;
         }
       `}</style>
 
