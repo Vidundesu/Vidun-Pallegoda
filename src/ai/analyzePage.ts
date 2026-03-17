@@ -10,9 +10,19 @@ Your task is to produce a detailed, evidence-based analysis of the page in JSON 
 
 STRICT RULES:
 - You MUST reference the exact metric values provided (e.g., "with only 1 H1 heading", "the 450 word count is below average")
-- Do NOT provide generic advice not grounded in the data
+- If a claim cannot be directly supported by a provided metric, DO NOT include it.
+- If insufficient data exists, explicitly state: "insufficient data"
 - Do NOT hallucinate information not present in the TOON input
 - Every field must be specific to this page's metrics
+- Do not include trailing commas
+- Do not include explanations outside JSON
+- All fields must be present even if value is "insufficient data"
+
+Use these general benchmarks:
+- word_count < 500 → thin content
+- images_missing_alt_pct > 30% → poor accessibility
+- cta_count < 2 → weak conversion signals
+- h1_count ≠ 1 → SEO issue
 
 Return ONLY valid JSON matching this exact schema:
 {
