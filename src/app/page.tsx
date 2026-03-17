@@ -741,16 +741,20 @@ const LogsPage = ({
                     <ShimmerRow />
                     <ShimmerRow />
                     <ShimmerRow />
+                    <ShimmerRow />
+                    <ShimmerRow />
+                    <ShimmerRow />
+                    <ShimmerRow />
                   </>
                 ) : null}
 
                 {!isLoading
                   ? runs.map((run) => (
-                  <tr key={run.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={run.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
                       <button
                         onClick={() => onOpen(run.id)}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium text-left"
+                        className="text-blue-600 cursor-pointer hover:text-blue-700 text-sm font-medium text-left"
                       >
                         {run.url}
                       </button>
