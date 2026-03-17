@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { getSupabaseServerClient } from "@/db/supabaseServer";
 
-import type { AuditResult, PageAnalysis, PageMetrics, Recommendation } from "@/core/types";
+import type { AuditResult } from "@/core/types";
 
-type PromptLogLine = {
+type PromptLogPayload = {
   timestamp: string;
   requestUrl: string;
   step: "analysis" | "recommendations";
@@ -12,32 +11,8 @@ type PromptLogLine = {
   rawOutput?: string;
 };
 
-const LOGS_DIR = path.join(process.cwd(), "logs");
-const LOG_FILE = path.join(LOGS_DIR, "audit.log.json");
-
-function base64UrlDecode(input: string): string {
-  const pad = input.length % 4 === 0 ? "" : "=".repeat(4 - (input.length % 4));
-  const b64 = input.replace(/-/g, "+").replace(/_/g, "/") + pad;
-  return Buffer.from(b64, "base64").toString("utf8");
-}
-
-function safeReadLogLines(): PromptLogLine[] {
-  if (!fs.existsSync(LOG_FILE)) return [];
-  const text = fs.readFileSync(LOG_FILE, "utf8");
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const parsed: PromptLogLine[] = [];
-  for (const line of lines) {
-    try {
-      parsed.push(JSON.parse(line) as PromptLogLine);
-    } catch {
-      // Skip malformed lines
-    }
-  }
-  return parsed;
+function isPromptLogPayload(p: PromptLogPayload | null): p is PromptLogPayload {
+  return p !== null;
 }
 
 function parseJsonFromRawOutput<T>(raw?: string): T | null {
@@ -49,95 +24,86 @@ function parseJsonFromRawOutput<T>(raw?: string): T | null {
   }
 }
 
-function parseMetrics(structuredInput: unknown): PageMetrics | null {
-  if (!structuredInput || typeof structuredInput !== "object") return null;
-  const m = structuredInput as Partial<PageMetrics>;
-
-  if (
-    typeof m.wordCount !== "number" ||
-    !m.headings ||
-    typeof (m.headings as any).h1 !== "number" ||
-    typeof (m.headings as any).h2 !== "number" ||
-    typeof (m.headings as any).h3 !== "number" ||
-    typeof m.ctaCount !== "number" ||
-    !m.links ||
-    typeof (m.links as any).internal !== "number" ||
-    typeof (m.links as any).external !== "number" ||
-    typeof m.imageCount !== "number" ||
-    typeof m.imagesMissingAltPercent !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    wordCount: m.wordCount,
-    headings: m.headings as PageMetrics["headings"],
-    ctaCount: m.ctaCount,
-    links: m.links as PageMetrics["links"],
-    imageCount: m.imageCount,
-    imagesMissingAltPercent: m.imagesMissingAltPercent,
-    metaTitle: typeof m.metaTitle === "string" || m.metaTitle === null ? m.metaTitle ?? null : null,
-    metaDescription:
-      typeof m.metaDescription === "string" || m.metaDescription === null
-        ? m.metaDescription ?? null
-        : null,
-  };
-}
-
-function findRecommendationsFor(
-  entries: PromptLogLine[],
-  url: string,
-  analysisTimestamp: string,
-): Recommendation[] | null {
-  const analysisTime = new Date(analysisTimestamp).getTime();
-  const windowMs = 10 * 60 * 1000;
-
-  const candidate = entries
-    .filter((e) => e.step === "recommendations" && e.requestUrl === url)
-    .filter((e) => {
-      const t = new Date(e.timestamp).getTime();
-      return t >= analysisTime && t - analysisTime <= windowMs;
-    })
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[0];
-
-  if (!candidate) return null;
-
-  const parsed = parseJsonFromRawOutput<Recommendation[]>(candidate.rawOutput);
-  return parsed;
-}
-
 export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   try {
     const { id } = await ctx.params;
-    const decoded = base64UrlDecode(id);
-    const [timestamp, url] = decoded.split("|", 2);
 
-    if (!timestamp || !url) {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("id,created_at,payload")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) {
       return NextResponse.json(
-        { success: false, error: "Invalid log id" },
-        { status: 400 },
+        { success: false, error: error.message },
+        { status: 500 },
       );
     }
 
-    const entries = safeReadLogLines();
-
-    const analysisEntry = entries.find(
-      (e) => e.step === "analysis" && e.timestamp === timestamp && e.requestUrl === url,
-    );
-
-    if (!analysisEntry) {
+    if (!data) {
       return NextResponse.json(
         { success: false, error: "Log entry not found" },
         { status: 404 },
       );
     }
 
-    const metrics = parseMetrics(analysisEntry.structuredInput);
-    const analysis = parseJsonFromRawOutput<PageAnalysis>(analysisEntry.rawOutput);
-    const recommendations = findRecommendationsFor(entries, url, timestamp) ?? [];
+    const analysisPayload = (data as any).payload as PromptLogPayload | null;
+    if (!analysisPayload) {
+      return NextResponse.json(
+        { success: false, error: "Log entry exists but has no result" },
+        { status: 422 },
+      );
+    }
+
+    if (analysisPayload.step !== "analysis") {
+      return NextResponse.json(
+        { success: false, error: "Log entry is not an analysis step" },
+        { status: 422 },
+      );
+    }
+
+    const url = analysisPayload.requestUrl;
+    const timestamp = analysisPayload.timestamp ?? String((data as any).created_at);
+    const analysisTime = new Date(timestamp).getTime();
+    const windowMs = 10 * 60 * 1000;
+
+    // Find matching recommendations payload
+    const { data: recRows, error: recError } = await supabase
+      .from("audit_logs")
+      .select("id,created_at,payload")
+      .order("created_at", { ascending: false })
+      .limit(2000);
+
+    if (recError) {
+      return NextResponse.json(
+        { success: false, error: recError.message },
+        { status: 500 },
+      );
+    }
+
+    const recPayload = (recRows ?? [])
+      .map((r) => (r as any).payload as PromptLogPayload | null)
+      .filter(isPromptLogPayload)
+      .filter((p) => p.step === "recommendations" && p.requestUrl === url)
+      .filter((p) => {
+        const t = new Date(p.timestamp).getTime();
+        return Number.isFinite(t) && t >= analysisTime && t - analysisTime <= windowMs;
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+      )[0];
+
+    // Reconstruct AuditResult from the logged inputs/outputs
+    const metrics = analysisPayload.structuredInput as any;
+    const analysis = parseJsonFromRawOutput<any>(analysisPayload.rawOutput);
+    const recommendations =
+      parseJsonFromRawOutput<any[]>(recPayload?.rawOutput) ?? [];
 
     if (!metrics || !analysis) {
       return NextResponse.json(
@@ -155,9 +121,9 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: {
-        id,
+        id: String((data as any).id),
         url,
-        timestamp,
+        timestamp: String((data as any).created_at),
         result,
       },
     });

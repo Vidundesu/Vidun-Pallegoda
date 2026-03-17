@@ -1,26 +1,37 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-
-const LOGS_DIR = path.join(process.cwd(), "logs");
-const LOG_FILE = path.join(LOGS_DIR, "audit.log.json");
+import { getSupabaseServerClient } from "@/db/supabaseServer";
 
 export async function GET(): Promise<NextResponse> {
   try {
-    if (!fs.existsSync(LOG_FILE)) {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("id,created_at,payload")
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (error) {
       return NextResponse.json(
-        { success: false, error: "Log file not found" },
-        { status: 404 },
+        { success: false, error: error.message },
+        { status: 500 },
       );
     }
 
-    const content = fs.readFileSync(LOG_FILE);
+    const normalized = (data ?? []).map((row) => {
+      return {
+        id: String((row as any).id),
+        timestamp: String((row as any).created_at),
+        payload: (row as any).payload ?? null,
+      };
+    });
 
-    return new NextResponse(content, {
+    const payload = Buffer.from(JSON.stringify(normalized, null, 2), "utf8");
+
+    return new NextResponse(payload, {
       status: 200,
       headers: {
-        "Content-Type": "application/x-ndjson; charset=utf-8",
-        "Content-Disposition": 'attachment; filename="audit.log.json"',
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="audit-runs.json"',
         "Cache-Control": "no-store",
       },
     });

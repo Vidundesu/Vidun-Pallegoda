@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ZodError } from "zod";
 import { AuditRequestSchema } from "@/validation/schemas";
 import { fetchPage, FetchError } from "@/scraper/fetchPage";
 import { extractMetrics } from "@/scraper/extractMetrics";

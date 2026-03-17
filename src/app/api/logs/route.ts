@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { getSupabaseServerClient } from "@/db/supabaseServer";
 
-type PromptLogLine = {
-  timestamp: string;
-  requestUrl: string;
-  step: "analysis" | "recommendations";
-  structuredInput?: unknown;
-  rawOutput?: string;
+type AuditLogPayload = {
+  timestamp?: string;
+  requestUrl?: string;
+  step?: "analysis" | "recommendations";
 };
 
 export type LogRunListItem = {
@@ -17,84 +14,57 @@ export type LogRunListItem = {
   hasRecommendations: boolean;
 };
 
-const LOGS_DIR = path.join(process.cwd(), "logs");
-const LOG_FILE = path.join(LOGS_DIR, "audit.log.json");
-
-function base64UrlEncode(input: string): string {
-  return Buffer.from(input, "utf8")
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-function safeReadLogLines(): PromptLogLine[] {
-  if (!fs.existsSync(LOG_FILE)) return [];
-  const text = fs.readFileSync(LOG_FILE, "utf8");
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const parsed: PromptLogLine[] = [];
-  for (const line of lines) {
-    try {
-      parsed.push(JSON.parse(line) as PromptLogLine);
-    } catch {
-      // Skip malformed lines
-    }
-  }
-  return parsed;
-}
-
-function toRuns(entries: PromptLogLine[]): LogRunListItem[] {
-  const sorted = [...entries].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-  );
-
-  const usedRecommendationIndexes = new Set<number>();
-  const runs: LogRunListItem[] = [];
-
-  for (let i = 0; i < sorted.length; i++) {
-    const e = sorted[i];
-    if (e.step !== "analysis") continue;
-
-    const analysisTime = new Date(e.timestamp).getTime();
-    const windowMs = 10 * 60 * 1000;
-
-    let hasRecommendations = false;
-
-    for (let j = 0; j < sorted.length; j++) {
-      if (usedRecommendationIndexes.has(j)) continue;
-      const r = sorted[j];
-      if (r.step !== "recommendations") continue;
-      if (r.requestUrl !== e.requestUrl) continue;
-
-      const recTime = new Date(r.timestamp).getTime();
-      if (recTime < analysisTime) continue;
-      if (recTime - analysisTime > windowMs) continue;
-
-      hasRecommendations = true;
-      usedRecommendationIndexes.add(j);
-      break;
-    }
-
-    const id = base64UrlEncode(`${e.timestamp}|${e.requestUrl}`);
-    runs.push({
-      id,
-      url: e.requestUrl,
-      timestamp: e.timestamp,
-      hasRecommendations,
-    });
-  }
-
-  return runs;
-}
-
 export async function GET(): Promise<NextResponse> {
   try {
-    const entries = safeReadLogLines();
-    const runs = toRuns(entries);
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("id,created_at,payload")
+      .order("created_at", { ascending: false })
+      .limit(1000);
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 },
+      );
+    }
+
+    const rows = (data ?? []).map((row) => {
+      const payload = (row as any).payload as AuditLogPayload | null;
+      return {
+        id: String((row as any).id),
+        createdAt: String((row as any).created_at),
+        payload,
+      };
+    });
+
+    const runs: LogRunListItem[] = [];
+    const windowMs = 10 * 60 * 1000;
+
+    for (const row of rows) {
+      if (!row.payload || row.payload.step !== "analysis") continue;
+
+      const timestamp = row.payload.timestamp ?? row.createdAt;
+      const url = row.payload.requestUrl ?? "";
+      if (!url) continue;
+
+      const analysisTime = new Date(timestamp).getTime();
+      const hasRecommendations = rows.some((r) => {
+        if (!r.payload || r.payload.step !== "recommendations") return false;
+        if ((r.payload.requestUrl ?? "") !== url) return false;
+        const t = new Date(r.payload.timestamp ?? r.createdAt).getTime();
+        return t >= analysisTime && t - analysisTime <= windowMs;
+      });
+
+      runs.push({
+        id: row.id,
+        url,
+        timestamp,
+        hasRecommendations,
+      });
+    }
+
     return NextResponse.json({ success: true, data: runs });
   } catch (err) {
     return NextResponse.json(

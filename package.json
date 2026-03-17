@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.79.0",
     "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.99.2",
     "@toon-format/toon": "^2.1.0",
     "cheerio": "^1.2.0",
     "lucide-react": "^0.577.0",
@@ -26,6 +27,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
+    "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.7",
     "tailwindcss": "^4",

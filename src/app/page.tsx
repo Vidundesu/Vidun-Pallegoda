@@ -51,6 +51,25 @@ type OpenedLog = {
   result: AuditResult;
 };
 
+const ShimmerRow = () => {
+  return (
+    <tr className="animate-pulse">
+      <td className="px-6 py-4">
+        <div className="h-4 w-64 bg-gray-200 rounded" />
+      </td>
+      <td className="px-6 py-4">
+        <div className="h-4 w-40 bg-gray-200 rounded" />
+      </td>
+      <td className="px-6 py-4">
+        <div className="h-5 w-20 bg-gray-200 rounded-full" />
+      </td>
+      <td className="px-6 py-4">
+        <div className="h-4 w-12 bg-gray-200 rounded" />
+      </td>
+    </tr>
+  );
+};
+
 async function postAudit(url: string): Promise<AuditResult> {
   const response = await fetch("/api/audit", {
     method: "POST",
@@ -683,9 +702,11 @@ const RecommendationsPage = ({ recommendations }: { recommendations: DashboardRe
 const LogsPage = ({
   runs,
   onOpen,
+  isLoading,
 }: {
   runs: ServerLogRun[];
   onOpen: (id: string) => Promise<void>;
+  isLoading: boolean;
 }) => {
   return (
     <div className="space-y-8">
@@ -694,7 +715,7 @@ const LogsPage = ({
         <p className="text-gray-500">Complete history of all URL analyses</p>
       </div>
 
-      {runs.length === 0 ? (
+      {!isLoading && runs.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-6xl mb-4">📋</div>
           <h2 className="text-2xl font-light text-gray-900 mb-2">No Logs Yet</h2>
@@ -713,7 +734,18 @@ const LogsPage = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {runs.map((run) => (
+                {isLoading ? (
+                  <>
+                    <ShimmerRow />
+                    <ShimmerRow />
+                    <ShimmerRow />
+                    <ShimmerRow />
+                    <ShimmerRow />
+                  </>
+                ) : null}
+
+                {!isLoading
+                  ? runs.map((run) => (
                   <tr key={run.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
                       <button
@@ -744,7 +776,8 @@ const LogsPage = ({
                       </div>
                     </td>
                   </tr>
-                ))}
+                ))
+                  : null}
               </tbody>
             </table>
           </div>
@@ -783,6 +816,7 @@ export default function AssignmentDashboard() {
   const [currentAnalysisUrl, setCurrentAnalysisUrl] = useState<string | null>(null);
 
   const [serverRuns, setServerRuns] = useState<ServerLogRun[]>([]);
+  const [serverRunsLoading, setServerRunsLoading] = useState(false);
   const [openedLog, setOpenedLog] = useState<OpenedLog | null>(null);
 
   const latestCompleted = useMemo(() => {
@@ -841,25 +875,22 @@ export default function AssignmentDashboard() {
     ];
   }, [effectiveResult]);
 
+  const fetchServerRuns = async () => {
+    setServerRunsLoading(true);
+    try {
+      const res = await fetch("/api/logs", { cache: "no-store" });
+      const json = (await res.json()) as { success: boolean; data?: ServerLogRun[] };
+      if (json.success && json.data) {
+        setServerRuns(json.data);
+      }
+    } finally {
+      setServerRunsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (currentPage !== "logs") return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/logs", { cache: "no-store" });
-        const json = (await res.json()) as { success: boolean; data?: ServerLogRun[] };
-        if (!cancelled && json.success && json.data) {
-          setServerRuns(json.data);
-        }
-      } catch {
-        // ignore
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    void fetchServerRuns();
   }, [currentPage]);
 
   const recommendations = useMemo<DashboardRecommendation[]>(() => {
@@ -996,7 +1027,7 @@ export default function AssignmentDashboard() {
           </div>
         );
       case 'logs':
-        return <LogsPage runs={serverRuns} onOpen={handleOpenServerLog} />;
+        return <LogsPage runs={serverRuns} onOpen={handleOpenServerLog} isLoading={serverRunsLoading} />;
       default:
         return <MainPage logs={logs} onAnalyze={handleAnalyze} isAnalyzing={isAnalyzing} error={error} onViewAllLogs={() => setCurrentPage("logs")} />;
     }
