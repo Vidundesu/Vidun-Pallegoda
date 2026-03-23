@@ -8,6 +8,13 @@ import { analyzePage } from "@/ai/analyzePage";
 import { generateRecommendations } from "@/ai/generateRecommendations";
 import type { AuditSuccessResponse, AuditErrorResponse } from "@/core/contracts";
 
+// Vercel: extend the serverless function timeout.
+// Hobby plan max is 60 s; Pro plan max is 300 s.
+// Without this the default is 10 s, which is not enough for
+// a full scrape + two sequential AI calls.
+export const maxDuration = 60;
+export const runtime = "nodejs";
+
 /**
  * POST /api/audit
  *
