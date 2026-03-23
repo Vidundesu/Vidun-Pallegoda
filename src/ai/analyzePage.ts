@@ -87,7 +87,7 @@ export async function analyzePage(
   rawOutput = await callClaude();
 
   // Log prompt + response
-  logPromptExchange({
+  await logPromptExchange({
     timestamp: new Date().toISOString(),
     requestUrl,
     step: "analysis",
@@ -109,7 +109,7 @@ export async function analyzePage(
     } catch {
       // Retry the whole call
       rawOutput = await callClaude();
-      logPromptExchange({
+      await logPromptExchange({
         timestamp: new Date().toISOString(),
         requestUrl,
         step: "analysis",
@@ -127,7 +127,7 @@ export async function analyzePage(
   if (!result.success) {
     // Retry once on validation failure
     rawOutput = await callClaude();
-    logPromptExchange({
+    await logPromptExchange({
       timestamp: new Date().toISOString(),
       requestUrl,
       step: "analysis",

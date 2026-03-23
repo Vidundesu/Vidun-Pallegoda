@@ -1,68 +1,23 @@
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
 import type { PromptLogEntry } from "@/core/contracts";
 import { getSupabaseServerClient } from "@/db/supabaseServer";
 
-function findRepoRoot(startDir: string): string {
-  let dir = startDir;
-  for (let i = 0; i < 10; i++) {
-    const candidate = path.join(dir, "package.json");
-    if (fs.existsSync(candidate)) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return startDir;
-}
-
-// Logs directory at project root (outside src/)
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = findRepoRoot(MODULE_DIR);
-const LOGS_DIR = path.join(REPO_ROOT, "logs");
-
-// Single append-friendly log file
-const LOG_FILE = path.join(LOGS_DIR, "audit.log.json");
-
 /**
- * logPromptExchange — Appends a structured JSON entry to the audit log.
+ * logPromptExchange — Persists a structured log entry to Supabase.
  *
- * Logs are newline-delimited JSON (NDJSON) — one JSON object per line,
- * making it easy to stream/parse with standard tools.
+ * Fully async and awaitable — safe for serverless runtimes where the
+ * execution context may be torn down immediately after the response is sent.
  *
- * Logged per AI call:
- * - requestUrl: the URL that was audited
- * - step: "analysis" | "recommendations"
- * - systemPrompt: the full system prompt sent to Claude
- * - userPrompt: the full user prompt (TOON data for step 1, metrics+analysis for step 2)
- * - structuredInput: the structured data object passed into the AI function
- * - rawOutput: the raw string returned by Claude before parsing
+ * If persistence fails, the error is logged via console.error and swallowed
+ * so that logging never crashes the request.
  */
-export function logPromptExchange(entry: PromptLogEntry): void {
+export async function logPromptExchange(entry: PromptLogEntry): Promise<void> {
   try {
-    void (async () => {
-      try {
-        const supabase = getSupabaseServerClient();
-        const { error } = await supabase.from("audit_logs").insert({ payload: entry });
-        if (error) throw new Error(error.message);
-      } catch (e: unknown) {
-        try {
-          // Create logs directory if it doesn't exist
-          if (!fs.existsSync(LOGS_DIR)) {
-            fs.mkdirSync(LOGS_DIR, { recursive: true });
-          }
-
-          const line = JSON.stringify(entry) + "\n";
-          fs.appendFileSync(LOG_FILE, line, "utf-8");
-        } catch (fallbackErr) {
-          console.error("[logger] Failed to write log entry fallback:", fallbackErr);
-        }
-
-        console.error("[logger] Failed to persist log entry to Supabase:", e);
-      }
-    })();
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase.from("audit_logs").insert({ payload: entry });
+    if (error) {
+      console.error("[logger] Failed to persist log entry to Supabase:", error.message);
+    }
   } catch (err) {
-    // Logging must never crash the request — degrade gracefully
-    console.error("[logger] Failed to write log entry:", err);
+    console.error("[logger] Unexpected error persisting log entry:", err);
   }
 }
