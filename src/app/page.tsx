@@ -821,12 +821,58 @@ const LogsPage = ({
   onOpen: (id: string) => Promise<void>;
   isLoading: boolean;
 }) => {
+  const [loadingLogId, setLoadingLogId] = useState<string | null>(null);
+  const [logError, setLogError] = useState<string | null>(null);
+
+  const handleOpen = async (id: string) => {
+    setLogError(null);
+    setLoadingLogId(id);
+    try {
+      await onOpen(id);
+    } catch (e) {
+      setLogError(e instanceof Error ? e.message : "Failed to open log");
+    } finally {
+      setLoadingLogId(null);
+    }
+  };
+
   return (
+    <>
+      {/* Full-screen loading overlay */}
+      {loadingLogId !== null ? (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center animate-fadeIn">
+          <div className="bg-white rounded-3xl p-12 max-w-sm w-full mx-4 shadow-2xl flex flex-col items-center gap-8">
+            <div className="relative w-24 h-24">
+              <div className="absolute inset-0 border-4 border-blue-100 rounded-full" />
+              <div className="absolute inset-0 border-4 border-t-blue-600 rounded-full animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center text-3xl">📋</div>
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-medium text-gray-900">Loading audit…</h3>
+              <p className="text-sm text-gray-500">Fetching log data from the server</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     <div className="space-y-8">
       <div>
         <h2 className="text-3xl font-light text-gray-900 mb-2">Analysis Logs</h2>
         <p className="text-gray-500">Complete history of all URL analyses</p>
       </div>
+
+      {logError ? (
+        <div className="flex items-center gap-3 px-5 py-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          <span className="text-lg">⚠️</span>
+          <span>{logError}</span>
+          <button
+            onClick={() => setLogError(null)}
+            className="ml-auto text-red-400 hover:text-red-600 font-medium transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
 
       {!isLoading && runs.length === 0 ? (
         <div className="text-center py-20">
@@ -863,37 +909,38 @@ const LogsPage = ({
 
                 {!isLoading
                   ? runs.map((run) => (
-                  <tr key={run.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => onOpen(run.id)}
-                        className="text-blue-600 cursor-pointer hover:text-blue-700 text-sm font-medium text-left"
-                      >
-                        {run.url}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {new Date(run.timestamp).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`px-3 py-1 ${run.hasRecommendations ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"} text-xs font-medium rounded-full`}
-                      >
-                        {run.hasRecommendations ? "completed" : "analysis"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex items-center gap-3">
-                        <a
-                          className="text-blue-600 hover:text-blue-700 font-medium"
-                          href={`/api/logs/${run.id}/download`}
+                    <tr key={run.id} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleOpen(run.id)}
+                          disabled={loadingLogId !== null}
+                          className="text-blue-600 cursor-pointer hover:text-blue-700 text-sm font-medium text-left disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          JSON
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {run.url}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {new Date(run.timestamp).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`px-3 py-1 ${run.hasRecommendations ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"} text-xs font-medium rounded-full`}
+                        >
+                          {run.hasRecommendations ? "completed" : "analysis"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex items-center gap-3">
+                          <a
+                            className="text-blue-600 hover:text-blue-700 font-medium"
+                            href={`/api/logs/${run.id}/download`}
+                          >
+                            JSON
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                   : null}
               </tbody>
             </table>
@@ -901,6 +948,7 @@ const LogsPage = ({
         </div>
       )}
     </div>
+    </>
   );
 };
 
@@ -1104,26 +1152,22 @@ export default function AssignmentDashboard() {
   };
 
   const handleOpenServerLog = async (id: string) => {
-    try {
-      const res = await fetch(`/api/logs/${id}`, { cache: "no-store" });
-      const json = (await res.json()) as {
-        success: boolean;
-        data?: { id: string; url: string; timestamp: string; result: AuditResult };
-        error?: string;
-      };
+    const res = await fetch(`/api/logs/${id}`, { cache: "no-store" });
+    const json = (await res.json()) as {
+      success: boolean;
+      data?: { id: string; url: string; timestamp: string; result: AuditResult };
+      error?: string;
+    };
 
-      if (!json.success || !json.data) {
-        setError(json.error ?? "Failed to open log");
-        return;
-      }
-
-      setError(null);
-      setOpenedLog(json.data);
-      setCurrentAnalysisUrl(json.data.url);
-      setCurrentPage("metrics");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to open log");
+    if (!json.success || !json.data) {
+      // Throw so LogsPage's local catch can display the error inline
+      throw new Error(json.error ?? "Failed to open log");
     }
+
+    setError(null);
+    setOpenedLog(json.data);
+    setCurrentAnalysisUrl(json.data.url);
+    setCurrentPage("metrics");
   };
 
   const renderPage = () => {

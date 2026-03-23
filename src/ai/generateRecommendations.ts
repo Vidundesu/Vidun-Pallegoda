@@ -103,7 +103,7 @@ Return ONLY a JSON array of recommendation objects.`;
   // Attempt 1
   rawOutput = await callClaude();
 
-  logPromptExchange({
+  await logPromptExchange({
     timestamp: new Date().toISOString(),
     requestUrl,
     step: "recommendations",
@@ -119,7 +119,7 @@ Return ONLY a JSON array of recommendation objects.`;
   } catch {
     // Retry on JSON parse failure
     rawOutput = await callClaude();
-    logPromptExchange({
+    await logPromptExchange({
       timestamp: new Date().toISOString(),
       requestUrl,
       step: "recommendations",
@@ -135,7 +135,7 @@ Return ONLY a JSON array of recommendation objects.`;
   if (!result.success) {
     // Retry once on schema validation failure
     rawOutput = await callClaude();
-    logPromptExchange({
+    await logPromptExchange({
       timestamp: new Date().toISOString(),
       requestUrl,
       step: "recommendations",
